@@ -1,0 +1,18 @@
+[Unit]
+Description=TikTok Shop Webhooks Node.js Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/home/baobao/Projects/Webhooks/tiktokshops
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=tiktok-webhooks
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
