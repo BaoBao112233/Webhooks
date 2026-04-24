@@ -134,75 +134,99 @@ app.post(MESSENGER_WEBHOOK_PATH, (req, res) => {
 });
 
 // ===== Event routers & handlers =====
+function logEvent(label, data) {
+    const ts = new Date().toISOString();
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`[${ts}] ${label}`);
+    console.log(JSON.stringify(data, null, 2));
+    console.log('─'.repeat(60));
+}
+
 function routeMessengerEvent(event, entry) {
     const senderId = event.sender && event.sender.id;
     const recipientId = event.recipient && event.recipient.id;
-    console.log(`Messenger event | page=${entry.id} sender=${senderId} recipient=${recipientId}`);
+    const timestamp = event.timestamp ? new Date(event.timestamp).toISOString() : null;
 
     if (event.message) {
-        return handleMessengerMessage(event);
+        return handleMessengerMessage(event, entry.id, senderId, recipientId, timestamp);
     }
     if (event.postback) {
-        return handleMessengerPostback(event);
+        return handleMessengerPostback(event, entry.id, senderId, timestamp);
     }
     if (event.delivery) {
-        return handleMessengerDelivery(event);
+        return handleMessengerDelivery(event, entry.id, senderId);
     }
     if (event.read) {
-        return handleMessengerRead(event);
+        return handleMessengerRead(event, entry.id, senderId);
     }
     if (event.optin) {
-        return handleMessengerOptin(event);
+        return handleMessengerOptin(event, entry.id, senderId);
     }
     if (event.referral) {
-        return handleMessengerReferral(event);
+        return handleMessengerReferral(event, entry.id, senderId);
     }
-    console.log('Unknown Messenger event:', JSON.stringify(event));
+    logEvent('⚠️  UNKNOWN EVENT', { pageId: entry.id, senderId, recipientId, timestamp, event });
 }
 
-function handleMessengerMessage(event) {
-    const text = event.message.text;
-    const attachments = event.message.attachments;
-    console.log('Messenger message:', { text, attachments });
+function handleMessengerMessage(event, pageId, senderId, recipientId, timestamp) {
+    const msg = event.message;
+    const isEcho = msg.is_echo;
+    const label = isEcho ? '📤 MESSAGE SENT (echo)' : '📨 MESSAGE RECEIVED';
+    logEvent(label, {
+        metadata: { pageId, senderId, recipientId, timestamp, mid: msg.mid },
+        text: msg.text || null,
+        attachments: msg.attachments || null,
+        quickReply: msg.quick_reply || null,
+        isEcho,
+        nlp: msg.nlp || null,
+    });
     // TODO: phản hồi tin nhắn qua Send API nếu cần
 }
 
-function handleMessengerPostback(event) {
-    console.log('Messenger postback:', event.postback);
+function handleMessengerPostback(event, pageId, senderId, timestamp) {
+    logEvent('🔘 POSTBACK', {
+        metadata: { pageId, senderId, timestamp },
+        title: event.postback.title,
+        payload: event.postback.payload,
+        referral: event.postback.referral || null,
+    });
     // TODO: xử lý payload từ button/menu
 }
 
-function handleMessengerDelivery(event) {
-    console.log('Messenger delivery:', event.delivery);
+function handleMessengerDelivery(event, pageId, senderId) {
+    logEvent('✅ DELIVERY', {
+        metadata: { pageId, senderId },
+        mids: event.delivery.mids || null,
+        watermark: event.delivery.watermark,
+    });
 }
 
-function handleMessengerRead(event) {
-    console.log('Messenger read:', event.read);
+function handleMessengerRead(event, pageId, senderId) {
+    logEvent('👁️  READ', {
+        metadata: { pageId, senderId },
+        watermark: event.read.watermark,
+    });
 }
 
-function handleMessengerOptin(event) {
-    console.log('Messenger optin:', event.optin);
+function handleMessengerOptin(event, pageId, senderId) {
+    logEvent('🔔 OPT-IN', {
+        metadata: { pageId, senderId },
+        optin: event.optin,
+    });
 }
 
-function handleMessengerReferral(event) {
-    console.log('Messenger referral:', event.referral);
+function handleMessengerReferral(event, pageId, senderId) {
+    logEvent('🔗 REFERRAL', {
+        metadata: { pageId, senderId },
+        referral: event.referral,
+    });
 }
 
 function handlePageFeedChange(change, entry) {
-    console.log(`Page feed change | page=${entry.id} field=${change.field}`);
-    switch (change.field) {
-        case 'feed':
-            console.log('Feed event:', change.value);
-            break;
-        case 'mention':
-            console.log('Mention event:', change.value);
-            break;
-        case 'messages':
-            console.log('Messages field event:', change.value);
-            break;
-        default:
-            console.log('Unhandled field:', change.field, change.value);
-    }
+    logEvent(`📋 PAGE FEED — field: ${change.field}`, {
+        metadata: { pageId: entry.id, field: change.field },
+        value: change.value,
+    });
 }
 
 // ===== OAuth callback (Facebook Login) =====
