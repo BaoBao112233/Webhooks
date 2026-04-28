@@ -168,19 +168,40 @@ function routeMessengerEvent(event, entry) {
     logEvent('⚠️  UNKNOWN EVENT', { pageId: entry.id, senderId, recipientId, timestamp, event });
 }
 
+// Phân loại nguồn tin nhắn: user / ai / staff
+// - Không phải echo => user (khách hàng nhắn vào page)
+// - Echo + app_id == FB_APP_ID => ai (do app của ta gửi qua Send API)
+// - Echo + metadata khớp AI_METADATA_TAG => ai (đánh dấu tường minh khi gọi Send API)
+// - Echo còn lại => staff (nhân viên trả lời từ Page Inbox / Meta Business Suite)
+function classifyMessageSource(msg) {
+    if (!msg.is_echo) return 'user';
+    const aiTag = process.env.AI_METADATA_TAG || 'ai';
+    if (msg.metadata && String(msg.metadata).toLowerCase() === aiTag.toLowerCase()) return 'ai';
+    if (process.env.FB_APP_ID && String(msg.app_id) === String(process.env.FB_APP_ID)) return 'ai';
+    return 'staff';
+}
+
+const SOURCE_LABELS = {
+    user: '👤 USER MESSAGE',
+    ai:   '🤖 AI MESSAGE (echo)',
+    staff:'🧑‍💼 STAFF MESSAGE (echo)',
+};
+
 function handleMessengerMessage(event, pageId, senderId, recipientId, timestamp) {
     const msg = event.message;
-    const isEcho = msg.is_echo;
-    const label = isEcho ? '📤 MESSAGE SENT (echo)' : '📨 MESSAGE RECEIVED';
-    logEvent(label, {
+    const source = classifyMessageSource(msg);
+    logEvent(SOURCE_LABELS[source], {
+        source,
         metadata: { pageId, senderId, recipientId, timestamp, mid: msg.mid },
         text: msg.text || null,
         attachments: msg.attachments || null,
         quickReply: msg.quick_reply || null,
-        isEcho,
+        isEcho: !!msg.is_echo,
+        appId: msg.app_id || null,
+        echoMetadata: msg.metadata || null,
         nlp: msg.nlp || null,
     });
-    // TODO: phản hồi tin nhắn qua Send API nếu cần
+    // TODO: gọi Send API kèm metadata=process.env.AI_METADATA_TAG khi AI trả lời
 }
 
 function handleMessengerPostback(event, pageId, senderId, timestamp) {
